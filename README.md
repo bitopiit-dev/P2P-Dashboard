@@ -1,47 +1,69 @@
 # P2P Material Collection Dashboard
 
-A single-page dashboard that turns the P2P Material Collection Tracker workbook (.xlsx) into a live view of deadline risk, progress by department and material, and who to chase next. It runs in any browser, fits any screen from a phone to a 4K TV, and holds no project data itself.
+A dashboard for the P2P Material Collection Tracker. An admin uploads the tracker workbook (.xlsx) once, and everyone who opens the link sees the same up-to-date view of deadline risk, progress by department and material, and who to chase next. It fits any screen from a phone to a 4K TV.
 
 **Open it:** https://bitopiit-dev.github.io/P2P-Dashboard/
 
-## How to use it
+## Who can do what
 
-1. Open the link on a phone, laptop or meeting-room screen.
-2. Tap **Load updated tracker (.xlsx)** and choose the latest tracker file from your device, Google Drive or OneDrive.
-3. The dashboard fills in. Your browser remembers the last file you loaded, so next time the dashboard opens with that data.
-4. Load the new workbook whenever the tracker is updated. **Forget data** clears the saved copy from that device.
-
-The dashboard uses Bitopi Group’s website colours and opens in dark mode. The half-circle button next to **Forget data** switches between dark and light, and each device remembers the choice.
-
-On a computer, hover over any heatmap cell for details. On a phone or tablet, tap the cell and the details open at the bottom of the screen. Tap a pipeline stage to highlight only those items, or tap a department name to highlight its row. **Clear highlights** resets the view.
-
-## Your data stays on your device
-
-The page reads the workbook inside your browser. Nothing is uploaded to GitHub or any server, and anyone who opens the link without the workbook sees an empty dashboard. This repository is public, so never commit the tracker .xlsx or any copy of the dashboard with data built in.
-
-## What the dashboard shows
-
-| Section | What it tells you |
+| Role | Can do |
 |---|---|
-| Deadline | Days left until the latest due date, items not yet received, and the items-per-day pace needed to finish on time |
-| Weighted progress | Overall progress using the status weights below (outer ring) and the share of items approved (inner ring) |
-| Collection pipeline | How many items sit at each status; tap a stage to filter the heatmap |
-| Department × material heatmap | Status of every department and material pair; departments with no activity show in pink |
-| Departments and materials by progress | Ranked bars showing who and what is lagging |
-| Chase list | Departments with items not started, their focal person, and the missing materials |
-| Review findings | Data-quality and risk checks recalculated on every load, such as silent departments, received items not yet reviewed, missing dates and an empty follow-up log |
+| Viewer (anyone with the link) | See the latest published dashboard, filter and highlight, switch light or dark theme |
+| Admin (signs in) | Everything a viewer can, plus upload a new tracker, see recent uploads, and delete an upload to roll back |
+
+Viewers don't sign in. The published data, including focal people's names and department status, is visible to anyone who has the link.
+
+## How it works
+
+The page is a single `index.html` on GitHub Pages. Data and admin sign-in live in a free [Supabase](https://supabase.com) project:
+
+- Each admin upload is read in the admin's browser and saved as one row in the `tracker_snapshots` table. The newest row is what everyone sees.
+- Database rules (Row Level Security) let anyone read rows, but only signed-in users listed in `dashboard_admins` can add or delete them. The publishable key in `index.html` is meant to be public; it can't bypass these rules.
+- Open screens check for a new upload every 5 minutes and whenever the page comes back into view. **Refresh** checks immediately.
+- If the internet drops, a device shows the last copy it loaded and says so.
+
+## One-time setup
+
+1. **Create a Supabase project** at https://supabase.com (free plan). Note the region closest to Bangladesh, such as Singapore.
+2. **Create the tables and rules.** In the project, open **SQL Editor → New query**, paste the whole of `supabase-setup.sql`, and click **Run**.
+3. **Create the admin user.** Go to **Authentication → Users → Add user → Create new user**, enter the admin's email and a strong password, and tick **Auto Confirm User**.
+4. **Mark that user as admin.** In **SQL Editor**, run (with the real email):
+   ```sql
+   insert into public.dashboard_admins (user_id, email)
+   select id, email from auth.users where email = 'admin@example.com'
+   on conflict (user_id) do nothing;
+   ```
+5. **Turn off public sign-ups.** In **Authentication → Sign In / Providers**, switch off **Allow new users to sign up**, so only users you create can sign in.
+6. **Connect the page.** In **Project Settings → API Keys**, copy the **Project URL** and the **Publishable key** (`sb_publishable_…`). Paste them into the `P2P_CONFIG` block near the top of `index.html`:
+   ```js
+   window.P2P_CONFIG = {
+     SUPABASE_URL: "https://abcdefgh.supabase.co",
+     SUPABASE_PUBLISHABLE_KEY: "sb_publishable_..."
+   };
+   ```
+   Never paste the **secret** key (`sb_secret_…`) or the legacy `service_role` key into `index.html`.
+7. **Publish.** Upload the edited `index.html` to this repository and wait for the green check under **Actions**.
+
+## Publishing a new tracker (admin)
+
+1. Open the site and click **Admin**.
+2. Sign in with the admin email and password.
+3. Click **Upload new tracker (.xlsx)** and choose the workbook.
+4. Check the summary (snapshot date, items, received, not started). Click **Publish to everyone**.
+
+To undo a bad upload, delete it under **Recent uploads**; everyone then sees the previous one. To add another admin, repeat setup steps 3 and 4 for that person. To remove one, run `delete from public.dashboard_admins where email = '...';`.
 
 ## Workbook requirements
 
-The dashboard expects the tracker's existing layout. Rename a sheet or column and loading will fail with a message naming the missing part.
+The upload expects the tracker's existing layout and stops with a message if something is missing.
 
-- **Tracker** sheet, with a header row containing `Department`, `Mat #`, `Material`, `Status`, `Dept focal person`, `Due date`, `Date requested`, `Date received`, `Date approved`, `File / link / location` and `Remarks / blockers`.
-- **Setup** sheet (optional): `Report date`, `Due-soon window (days)`, and the status weight rows. When it is missing, the defaults below apply.
+- **Tracker** sheet with a header row containing `Department`, `Mat #`, `Material`, `Status`, `Dept focal person`, `Due date`, `Date requested`, `Date received`, `Date approved`, `File / link / location` and `Remarks / blockers`.
+- **Setup** sheet (optional): `Report date`, `Due-soon window (days)` and the status weight rows.
 - **Follow-up Log** sheet (optional): used to count logged reminders.
 
 ## Status weights and flags
 
-Progress is the average weight of all applicable items. N/A items are excluded. Weights in the workbook's Setup sheet override these defaults.
+Progress is the average weight of all applicable items; N/A items are excluded. Weights in the workbook's Setup sheet override these defaults.
 
 | Status | Weight |
 |---|---|
@@ -53,34 +75,34 @@ Progress is the average weight of all applicable items. N/A items are excluded. 
 | Under Review | 80% |
 | Approved | 100% |
 
-Flags use today's date on the viewing device. An item is **Overdue** when its due date has passed and it is not approved. It is **Due soon** when the due date falls within the due-soon window (3 days by default).
+Flags use today's date on the viewing device. An item is **Overdue** when its due date has passed and it isn't approved, and **Due soon** when the due date is within the due-soon window (3 days by default).
 
-## Updating the site
+## Updating the site code
 
-1. In this repository, open **Add file → Upload files**.
-2. Drag in the new `index.html` and click **Commit changes**. It replaces the old file.
-3. Wait for the **pages build and deployment** run under **Actions** to show a green check, usually one to two minutes.
-4. Reload the site with Ctrl + F5 (or refresh on a phone).
-
-GitHub Pages is configured under **Settings → Pages** to deploy from the `main` branch, `/ (root)` folder.
+Upload the new `index.html` with **Add file → Upload files → Commit changes**, wait for the green check under **Actions**, then reload with Ctrl + F5. Keep the `P2P_CONFIG` values when you replace the file. Never commit the tracker .xlsx; this repository is public.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `index.html` | The whole dashboard: layout, styles and logic in one file |
+| `index.html` | The dashboard and admin panel |
+| `supabase-setup.sql` | Creates the tables, admin check and security rules in Supabase |
 | `README.md` | This guide |
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| 404 "File not found" | Check that the file is named exactly `index.html` (lowercase), sits in the repository root, and that Pages deploys from `main` / `(root)`. |
-| "The spreadsheet reader needs an internet connection" | The page loads its Excel reader (SheetJS) from cdnjs. Connect to the internet and try again. |
-| "No Tracker sheet found" or "Couldn't find the Tracker header row" | Use the original tracker workbook; the sheet must be named `Tracker` and keep its header row. |
-| Old version still showing | Reload with Ctrl + F5, or clear the browser cache on the phone. |
-| Fonts look plain | The Barlow and Inter fonts load from Google Fonts. Without internet, system fonts are used; all data still shows. |
+| Page says "Setup needed" | `P2P_CONFIG` still has the placeholder values. Paste the real Project URL and publishable key. |
+| "No tracker published yet" | No admin has uploaded yet. |
+| "Wrong email or password" | Check the admin user in Supabase **Authentication → Users**, or reset the password there. |
+| "This account isn't on the admin list" | Run the `insert into public.dashboard_admins …` statement for that email. |
+| "Couldn't publish: … row-level security …" | The signed-in user isn't in `dashboard_admins`, or `supabase-setup.sql` wasn't run fully. |
+| 404 "File not found" | The file must be named `index.html` in the repository root, and Pages must deploy from `main` / `(root)`. |
+| Old version still showing | Reload with Ctrl + F5, or refresh the page on a phone. |
+
+Supabase pauses free projects after about a week without any requests. If the dashboard stops loading after a quiet period, open the project in Supabase and click **Restore**.
 
 ## Built with
 
-Plain HTML, CSS and JavaScript in a single file. SheetJS 0.18.5 reads the workbook in the browser. No build step and no server code.
+Plain HTML, CSS and JavaScript in one file; SheetJS 0.18.5 reads the workbook in the browser; supabase-js 2.117.3 handles sign-in and data. No build step.

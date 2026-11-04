@@ -8,7 +8,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+/* ===== SETUP: paste your Supabase project values here (both are safe to publish) ===== */
+window.P2P_CONFIG = {
+  SUPABASE_URL: "https://ycacorayydroecqeypis.supabase.co",
+  SUPABASE_PUBLISHABLE_KEY: "sb_publishable_bKEq-s4SCiPLV6QI8dhJ9Q_jV5KqJQs"
+};
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
 <style>
 :root{
   --brand:#0C79BC; --navy:#264F6D;
@@ -175,6 +183,28 @@ th.num{text-align:right}
 #tip .m{color:var(--muted)}
 #tip.sheet{left:8px!important;right:8px;top:auto!important;bottom:calc(10px + env(safe-area-inset-bottom,0px));max-width:none;padding:14px 16px;font-size:14px;pointer-events:auto;border-color:var(--brand);border-width:1.5px}
 #tip.sheet .t{font-size:17px}
+dialog{border:1px solid var(--line2);border-radius:20px;background:var(--panel);color:var(--fg);padding:0;width:min(520px,calc(100vw - 24px));max-height:calc(100vh - 40px)}
+dialog::backdrop{background:rgba(0,0,0,.55);backdrop-filter:blur(3px)}
+.dlg-head{display:flex;justify-content:space-between;align-items:center;padding:18px 20px 6px}
+.dlg-head h2{font-size:22px;text-transform:uppercase}
+.dlg-body{padding:6px 20px 20px;display:grid;gap:12px}
+.dlg-body label{display:grid;gap:4px;font-size:13px;color:var(--muted)}
+.dlg-body input{background:var(--bg2);border:1px solid var(--line2);border-radius:10px;padding:10px 12px;font-size:15px;color:var(--fg)}
+.dlg-body .hint{color:var(--muted);font-size:13px;margin:0}
+.dlg-body h3{font-size:15px;text-transform:uppercase;margin-top:6px}
+.dlg-body .btn{border:1px solid var(--line2)}
+.dlg-body .btn.primary{border-color:transparent}
+.linkbtn{background:none;border:0;color:var(--accent);cursor:pointer;padding:0;text-decoration:underline}
+.msg{font-size:13.5px;min-height:1em}
+.msg.err{color:var(--s-ns)} .msg.ok{color:var(--s-ap)}
+.preview{border:1px dashed var(--brand);border-radius:14px;padding:12px 14px;display:grid;gap:8px}
+.preview dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:13.5px}
+.preview dt{color:var(--muted)} .preview dd{margin:0;font-weight:600}
+.preview .row{display:flex;gap:8px;flex-wrap:wrap}
+.history{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:240px;overflow:auto}
+.history li{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px}
+.history li.live{border-color:var(--brand)}
+.history small{color:var(--muted);display:block}
 footer{color:var(--dim);font-size:12.5px;margin-top:24px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -186,12 +216,13 @@ footer{color:var(--dim);font-size:12.5px;margin-top:24px}
       <div class="eyebrow">Bitopi Group <i></i> P2P tracker</div>
       <h1>Material collection <span>command center</span></h1>
       <div class="sub" id="subline">—</div>
+      <div class="sub" id="updated"></div>
     </div>
     <div>
       <div class="actions">
-        <button class="btn primary" id="loadBtn" type="button">Load updated tracker (.xlsx)</button>
+        <button class="btn" id="refreshBtn" type="button">Refresh</button>
         <button class="btn" id="clearBtn" type="button">Clear highlights</button>
-        <button class="btn" id="forgetBtn" type="button" hidden>Forget data</button>
+        <button class="btn primary" id="adminBtn" type="button">Admin</button>
         <button class="btn icon-btn" id="themeBtn" type="button" aria-label="Switch light or dark theme" title="Switch light or dark theme"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-4px"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
         <input type="file" id="fileIn" accept=".xlsx,.xlsm">
       </div>
@@ -200,9 +231,8 @@ footer{color:var(--dim);font-size:12.5px;margin-top:24px}
   </header>
 
   <section class="panel empty" id="empty">
-    <h2>Open your tracker to see the dashboard</h2>
-    <p class="hint">This page holds no data. Tap “Load updated tracker” and choose P2P_Material_Collection_Tracker.xlsx from your phone or computer. The file is read on your device only and never uploaded. The last tracker you opened is remembered on this device until you clear it.</p>
-    <button class="btn primary" type="button" onclick="document.getElementById('fileIn').click()">Choose tracker file</button>
+    <h2 id="emptyTitle">Loading the latest tracker…</h2>
+    <p class="hint" id="emptyText">Fetching the dashboard data.</p>
   </section>
   <div id="main" hidden>
   <section class="hero">
@@ -273,9 +303,35 @@ footer{color:var(--dim);font-size:12.5px;margin-top:24px}
   </div>
 </div>
 <div id="tip" role="tooltip"></div>
+<dialog id="adminDlg" aria-labelledby="adminTitle">
+  <div class="dlg-head"><h2 id="adminTitle">Admin panel</h2><button class="btn icon-btn" type="button" id="dlgClose" aria-label="Close">✕</button></div>
+  <form id="loginForm" class="dlg-body" autocomplete="on">
+    <p class="hint">Only admins can publish a new tracker. Everyone else just views the dashboard.</p>
+    <label>Email<input type="email" id="email" required autocomplete="username"></label>
+    <label>Password<input type="password" id="password" required autocomplete="current-password"></label>
+    <button class="btn primary" type="submit" id="loginBtn">Sign in</button>
+    <div class="msg" id="loginMsg" role="alert"></div>
+  </form>
+  <div id="adminBody" class="dlg-body" hidden>
+    <p class="hint">Signed in as <b id="whoami"></b>. <button class="linkbtn" type="button" id="logoutBtn">Sign out</button></p>
+    <div id="notAdmin" class="msg" hidden>This account isn’t on the admin list, so it can’t publish. Ask the dashboard owner to add it.</div>
+    <div id="adminTools" hidden>
+      <button class="btn primary" type="button" id="pickBtn">Upload new tracker (.xlsx)</button>
+      <div id="preview" class="preview" hidden>
+        <h3>Check before publishing</h3>
+        <dl id="pvList"></dl>
+        <div class="row"><button class="btn primary" type="button" id="publishBtn">Publish to everyone</button><button class="btn" type="button" id="cancelBtn">Cancel</button></div>
+      </div>
+      <div class="msg" id="adminMsg" role="status"></div>
+      <h3>Recent uploads</h3>
+      <p class="hint">The newest upload is what everyone sees. Delete it to go back to the previous one.</p>
+      <ul id="history" class="history"></ul>
+    </div>
+  </div>
+</dialog>
 
 <script>
-const KEY="p2p-dashboard-last";
+
 const STAGES = [
   {k:"Not Started",       c:"var(--s-ns)", w:0},
   {k:"Requested",         c:"var(--s-req)", w:0.1},
@@ -492,44 +548,151 @@ document.addEventListener("scroll",()=>{if(!TOUCH)tip.style.opacity=0;},{passive
 function fitScreen(){const w=document.documentElement.clientWidth;const z=w>1440?Math.min(w/1440,3):1;document.documentElement.style.setProperty("--z",z.toFixed(3));}
 fitScreen(); addEventListener("resize",fitScreen); addEventListener("orientationchange",fitScreen);
 
-// load xlsx
-$("loadBtn").onclick=()=>$("fileIn").click();
+// ---------- theme + highlight buttons
 $("themeBtn").onclick=()=>{const cur=document.documentElement.getAttribute("data-theme")==="light"?"dark":"light";
   document.documentElement.setAttribute("data-theme",cur); try{localStorage.setItem("p2p-theme",cur);}catch(_){} };
 $("clearBtn").onclick=()=>{if(!state)return;active=null;hiDept=null;render();};
-$("fileIn").onchange=async e=>{
-  const f=e.target.files[0]; if(!f) return; const toast=$("toast");
-  try{
-    if(typeof XLSX==="undefined") throw new Error("The spreadsheet reader needs an internet connection to load.");
-    const wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true});
-    const ws=wb.Sheets["Tracker"]; if(!ws) throw new Error("No “Tracker” sheet found in this file.");
-    const A=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
-    const hi=A.findIndex(r=>r.includes("Department")&&r.includes("Status")); if(hi<0) throw new Error("Couldn’t find the Tracker header row.");
-    const H=A[hi], ix=n=>H.indexOf(n);
-    const iso=v=>v instanceof Date?`${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,"0")}-${String(v.getDate()).padStart(2,"0")}`:(typeof v==="number"?iso(new Date(Math.round((v-25569)*DAY)+new Date().getTimezoneOffset()*6e4)):"");
-    const cols=["Department","Mat #","Material","Status","Dept focal person","Due date","Date requested","Date received","Date approved","File / link / location","Remarks / blockers"];
-    const rows=A.slice(hi+1).filter(r=>r[ix("Department")]).map(r=>cols.map((c,j)=>{const v=ix(c)>=0?r[ix(c)]:"";return j>=5&&j<=8?iso(v):String(v).trim();}));
-    let reportDate="", dueSoon=3, followups=0;
-    const su=wb.Sheets["Setup"]; if(su){XLSX.utils.sheet_to_json(su,{header:1,defval:""}).forEach(r=>{
-      if(r[0]==="Report date"&&r[1]) reportDate=iso(r[1]); if(String(r[0]).startsWith("Due-soon")&&r[1]!=="") dueSoon=+r[1];
-      STAGES.forEach(s=>{if(r[0]===s.k&&r[1]!=="")s.w=+r[1];});});}
-    const fl=wb.Sheets["Follow-up Log"]; if(fl){const F=XLSX.utils.sheet_to_json(fl,{header:1,defval:""});const h=F.findIndex(r=>r[0]==="Date");if(h>=0)followups=F.slice(h+1).filter(r=>r[0]!==""&&r[1]!=="").length;}
-    const raw={reportDate,dueSoon,rows,followups,source:f.name,weights:STAGES.map(s=>s.w)};
-    try{localStorage.setItem(KEY,JSON.stringify(raw));}catch(_){}
-    show(raw);
-    toast.className="toast"; toast.textContent=`Loaded ${rows.length} items from ${f.name}.`;
-  }catch(err){toast.className="toast err";toast.textContent=err.message;}
-  e.target.value="";
-};
 
-function show(raw){
-  if(raw.weights) STAGES.forEach((s,i)=>{if(raw.weights[i]!=null)s.w=raw.weights[i];});
-  state=build(raw); active=null; hiDept=null;
-  $("empty").hidden=true; $("main").hidden=false; $("forgetBtn").hidden=false; render();
+// ---------- workbook parsing (admin only)
+const DEFAULT_W=STAGES.map(s=>s.w);
+async function parseWorkbook(f){
+  if(typeof XLSX==="undefined") throw new Error("The spreadsheet reader couldn’t load. Check the internet connection.");
+  const wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true});
+  const ws=wb.Sheets["Tracker"]; if(!ws) throw new Error("No “Tracker” sheet found in this file.");
+  const A=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
+  const hi=A.findIndex(r=>r.includes("Department")&&r.includes("Status")); if(hi<0) throw new Error("Couldn’t find the Tracker header row.");
+  const H=A[hi], ix=n=>H.indexOf(n);
+  const iso=v=>v instanceof Date?`${v.getFullYear()}-${String(v.getMonth()+1).padStart(2,"0")}-${String(v.getDate()).padStart(2,"0")}`:(typeof v==="number"?iso(new Date(Math.round((v-25569)*DAY)+new Date().getTimezoneOffset()*6e4)):"");
+  const cols=["Department","Mat #","Material","Status","Dept focal person","Due date","Date requested","Date received","Date approved","File / link / location","Remarks / blockers"];
+  const rows=A.slice(hi+1).filter(r=>r[ix("Department")]).map(r=>cols.map((c,j)=>{const v=ix(c)>=0?r[ix(c)]:"";return j>=5&&j<=8?iso(v):String(v).trim();}));
+  if(!rows.length) throw new Error("The Tracker sheet has no rows.");
+  let reportDate="", dueSoon=3, followups=0; const weights=DEFAULT_W.slice();
+  const su=wb.Sheets["Setup"]; if(su){XLSX.utils.sheet_to_json(su,{header:1,defval:""}).forEach(r=>{
+    if(r[0]==="Report date"&&r[1]) reportDate=iso(r[1]); if(String(r[0]).startsWith("Due-soon")&&r[1]!=="") dueSoon=+r[1];
+    STAGES.forEach((s,i)=>{if(r[0]===s.k&&r[1]!=="")weights[i]=+r[1];});});}
+  const fl=wb.Sheets["Follow-up Log"]; if(fl){const F=XLSX.utils.sheet_to_json(fl,{header:1,defval:""});const h=F.findIndex(r=>r[0]==="Date");if(h>=0)followups=F.slice(h+1).filter(r=>r[0]!==""&&r[1]!=="").length;}
+  return {reportDate,dueSoon,rows,followups,source:f.name,weights};
 }
-$("forgetBtn").onclick=()=>{try{localStorage.removeItem(KEY);}catch(_){} state=null;
-  $("main").hidden=true; $("empty").hidden=false; $("forgetBtn").hidden=true; $("toast").className="toast"; $("toast").textContent="Data removed from this device.";};
-try{const s=localStorage.getItem(KEY); if(s) show(JSON.parse(s));}catch(_){}
+
+// ---------- show data
+function show(raw,meta){
+  STAGES.forEach((s,i)=>{s.w=(raw.weights&&raw.weights[i]!=null)?raw.weights[i]:DEFAULT_W[i];});
+  state=build(raw); active=null; hiDept=null;
+  $("empty").hidden=true; $("main").hidden=false; render();
+  const u=$("updated");
+  u.textContent=meta&&meta.at?`Last published ${new Date(meta.at).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}${meta.offline?" · offline, showing the last copy this device saw":""}`:"";
+}
+function showEmpty(title,text){ $("main").hidden=true; $("empty").hidden=false; $("emptyTitle").textContent=title; $("emptyText").textContent=text; }
+
+// ---------- Supabase
+const CFG=window.P2P_CONFIG||{};
+const configured=CFG.SUPABASE_URL&&!/YOUR-PROJECT/.test(CFG.SUPABASE_URL)&&CFG.SUPABASE_PUBLISHABLE_KEY&&!/YOUR_KEY/.test(CFG.SUPABASE_PUBLISHABLE_KEY);
+const sb=(configured&&window.supabase)?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_PUBLISHABLE_KEY):null;
+const CACHE="p2p-public-cache";
+let liveId=null, lastAt=null;
+
+async function loadLatest(quiet){
+  if(!sb){ showEmpty(configured?"Couldn’t load the data service":"Setup needed",
+    configured?"Check the internet connection and refresh.":"The site owner needs to add the Supabase URL and publishable key at the top of index.html. See README.md."); return; }
+  try{
+    const {data,error}=await sb.from("tracker_snapshots").select("id,created_at,payload").order("created_at",{ascending:false}).limit(1);
+    if(error) throw error;
+    if(!data.length){ liveId=null; showEmpty("No tracker published yet","An admin needs to upload the tracker from the Admin button."); return; }
+    const d=data[0];
+    if(quiet&&d.id===liveId) return;
+    liveId=d.id; lastAt=d.created_at;
+    try{localStorage.setItem(CACHE,JSON.stringify({payload:d.payload,at:d.created_at}));}catch(_){}
+    show(d.payload,{at:d.created_at});
+  }catch(err){
+    let c=null; try{c=JSON.parse(localStorage.getItem(CACHE)||"null");}catch(_){}
+    if(c&&!state) show(c.payload,{at:c.at,offline:true});
+    else if(!state) showEmpty("Couldn’t load the latest tracker","Check the internet connection and press Refresh.");
+  }
+}
+$("refreshBtn").onclick=()=>loadLatest(false);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)loadLatest(true);});
+setInterval(()=>loadLatest(true),5*60*1000);   // TVs and wall screens pick up new uploads every 5 minutes
+
+// ---------- admin panel
+const dlg=$("adminDlg"); let pending=null;
+function msg(id,text,kind){const m=$(id);m.textContent=text;m.className="msg"+(kind?" "+kind:"");}
+$("adminBtn").onclick=async()=>{
+  if(!sb){ alert("The data service isn’t set up yet. See README.md."); return; }
+  dlg.showModal(); await refreshAdmin();
+};
+$("dlgClose").onclick=()=>dlg.close();
+dlg.addEventListener("click",e=>{if(e.target===dlg)dlg.close();});
+
+async function refreshAdmin(){
+  const {data:{session}}=await sb.auth.getSession();
+  $("loginForm").hidden=!!session; $("adminBody").hidden=!session;
+  if(!session) return;
+  $("whoami").textContent=session.user.email;
+  const {data,error}=await sb.rpc("is_dashboard_admin");
+  const ok=!error&&data===true;
+  $("notAdmin").hidden=ok; $("adminTools").hidden=!ok;
+  if(ok) loadHistory();
+}
+$("loginForm").onsubmit=async e=>{
+  e.preventDefault(); msg("loginMsg","Signing in…");
+  const {error}=await sb.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
+  $("password").value="";
+  if(error){msg("loginMsg",error.message==="Invalid login credentials"?"Wrong email or password.":error.message,"err");return;}
+  msg("loginMsg",""); refreshAdmin();
+};
+$("logoutBtn").onclick=async()=>{await sb.auth.signOut(); pending=null; $("preview").hidden=true; msg("adminMsg",""); refreshAdmin();};
+
+const picker=$("fileIn");
+$("pickBtn").onclick=()=>picker.click();
+picker.onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  try{
+    pending=await parseWorkbook(f);
+    const rows=pending.rows, st=rows.map(r=>r[3]||"N/A");
+    const cnt=k=>st.filter(s=>s===k).length;
+    const items=[["File",f.name],["Snapshot date",pending.reportDate?fmtD(parseISO(pending.reportDate)):"not set"],
+      ["Departments",new Set(rows.map(r=>r[0])).size],["Items",rows.length],
+      ["Received or beyond",cnt("Received")+cnt("Under Review")+cnt("Approved")],["Not started",cnt("Not Started")],["Approved",cnt("Approved")]];
+    const dl=$("pvList"); dl.innerHTML="";
+    items.forEach(([a,b])=>{const dt=document.createElement("dt");dt.textContent=a;const dd=document.createElement("dd");dd.textContent=b;dl.append(dt,dd);});
+    $("preview").hidden=false; msg("adminMsg","");
+  }catch(err){pending=null;$("preview").hidden=true;msg("adminMsg",err.message,"err");}
+};
+$("cancelBtn").onclick=()=>{pending=null;$("preview").hidden=true;};
+$("publishBtn").onclick=async()=>{
+  if(!pending) return; const b=$("publishBtn"); b.disabled=true; msg("adminMsg","Publishing…");
+  const {error}=await sb.from("tracker_snapshots").insert({source_name:pending.source,payload:pending});
+  b.disabled=false;
+  if(error){msg("adminMsg","Couldn’t publish: "+error.message,"err");return;}
+  pending=null; $("preview").hidden=true; msg("adminMsg","Published. Everyone now sees this tracker.","ok");
+  await loadLatest(false); loadHistory();
+};
+async function loadHistory(){
+  const ul=$("history"); ul.innerHTML="<li>Loading…</li>";
+  const {data,error}=await sb.from("tracker_snapshots").select("id,created_at,source_name").order("created_at",{ascending:false}).limit(10);
+  ul.innerHTML="";
+  if(error){ul.innerHTML="<li>Couldn’t load the upload history.</li>";return;}
+  if(!data.length){ul.innerHTML="<li>No uploads yet.</li>";return;}
+  data.forEach((r,i)=>{
+    const li=document.createElement("li"); if(i===0) li.className="live";
+    const info=document.createElement("div");
+    info.textContent=r.source_name||"Tracker";
+    const sm=document.createElement("small");
+    sm.textContent=new Date(r.created_at).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})+(i===0?" · live now":"");
+    info.append(sm);
+    const del=document.createElement("button"); del.type="button"; del.className="btn"; del.textContent="Delete";
+    del.onclick=async()=>{
+      if(!confirm(i===0?"Delete the live upload? Everyone will see the previous upload instead.":"Delete this older upload?")) return;
+      const {error}=await sb.from("tracker_snapshots").delete().eq("id",r.id);
+      if(error){msg("adminMsg","Couldn’t delete: "+error.message,"err");return;}
+      msg("adminMsg","Deleted.","ok"); await loadLatest(false); loadHistory();
+    };
+    li.append(info,del); ul.append(li);
+  });
+}
+if(sb) sb.auth.onAuthStateChange(()=>{ if(dlg.open) refreshAdmin(); });
+
+loadLatest(false);
 </script>
 </body>
 </html>
