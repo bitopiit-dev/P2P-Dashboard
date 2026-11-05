@@ -145,11 +145,13 @@ button,input{font:inherit;color:inherit}
 
 /* resources submitted */
 .subm{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:0;padding:0;list-style:none}
-.subm li{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-left:3px solid var(--s-ap);border-radius:12px;padding:10px 14px;background:var(--panel2);cursor:pointer}
+.subm li{position:relative;display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-left:3px solid var(--s-ap);border-radius:12px;padding:10px 14px;background:var(--panel2);cursor:pointer}
 .subm li:hover{border-color:var(--line2);border-left-color:var(--s-ap)}
 .subm .sl{font-family:var(--display);font-weight:700;font-size:20px;color:var(--s-ap);min-width:26px;text-align:right}
 .subm .dn2{font-weight:600;color:var(--head)}
 .subm small{display:block;color:var(--muted);font-size:12.5px}
+.subm .stars{position:absolute;top:7px;left:10px;display:flex;gap:2px;line-height:0}
+.subm .stars svg{width:15px;height:15px;fill:#F5B301;stroke:#B07D00;stroke-width:1;filter:drop-shadow(0 0 3px rgba(245,179,1,.45))}
 .subm-count{font-family:var(--display);font-weight:700;color:var(--s-ap)}
 
 /* chase + review */
@@ -506,6 +508,12 @@ function render(){
       li.children[0].textContent=i+1; li.querySelector(".dn2").textContent=d;
       const dr=S.rows.filter(r=>r.dept===d);
       if(dr.length){const a=agg(dr); li.querySelector("small").textContent=`${a.recPlus} of ${a.app} items received · ${Math.round(a.prog*100)}% progress`;
+        // gold stars: 2 when every applicable item is received, 1 when only some are
+        const full=a.app>0&&a.recPlus===a.app, n=full?2:1;
+        const st=document.createElement("span"); st.className="stars"; st.setAttribute("role","img");
+        st.setAttribute("aria-label",n===2?"2 stars: all items received":"1 star: some items received"); st.title=st.getAttribute("aria-label");
+        st.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg>'.repeat(n);
+        li.prepend(st);
         li.tabIndex=0; const go=()=>{hiDept=hiDept===d?null:d;render();$("hm").scrollIntoView({behavior:"smooth",block:"center"});};
         li.onclick=go; li.onkeydown=e=>{if(e.key==="Enter")go();};}
       sl.append(li);
