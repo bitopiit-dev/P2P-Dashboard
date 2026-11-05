@@ -143,6 +143,15 @@ button,input{font:inherit;color:inherit}
 .rk .pc{font-family:var(--display);font-weight:600;text-align:right}
 .rk.silent .nm{color:var(--s-ns)}
 
+/* resources submitted */
+.subm{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:0;padding:0;list-style:none}
+.subm li{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-left:3px solid var(--s-ap);border-radius:12px;padding:10px 14px;background:var(--panel2);cursor:pointer}
+.subm li:hover{border-color:var(--line2);border-left-color:var(--s-ap)}
+.subm .sl{font-family:var(--display);font-weight:700;font-size:20px;color:var(--s-ap);min-width:26px;text-align:right}
+.subm .dn2{font-weight:600;color:var(--head)}
+.subm small{display:block;color:var(--muted);font-size:12.5px}
+.subm-count{font-family:var(--display);font-weight:700;color:var(--s-ap)}
+
 /* chase + review */
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th{font-family:var(--display);font-weight:700;text-transform:uppercase;letter-spacing:.03em;font-size:12.5px;color:var(--muted);text-align:left;border-bottom:1px solid var(--line2);padding:8px}
@@ -285,6 +294,12 @@ footer{color:var(--dim);font-size:12.5px;margin-top:24px}
       <p class="hint">Which deliverables are lagging across all departments.</p>
       <div class="rank" id="matRank"></div>
     </div>
+  </section>
+
+  <section class="panel" id="submPanel">
+    <h2>Resources submitted by department</h2>
+    <p class="hint" id="submHint">From the Setup sheet’s “Sl / Department” list.</p>
+    <ol class="subm" id="subm"></ol>
   </section>
 
   <section class="two">
@@ -476,6 +491,27 @@ function render(){
   const matA=S.mats.map(m=>({m,a:agg(S.rows.filter(r=>r.mat===m))})).sort((x,y)=>y.a.prog-x.a.prog);
   rank($("matRank"),matA.map(x=>({name:`${x.m}. ${SHORT[x.m-1]||S.matName[x.m]}`,v:x.a.prog,tip:`${S.matName[x.m]}|${x.a.recPlus} of ${x.a.app} received · ${x.a.notStarted} not started`})));
 
+  // resources submitted
+  const sl=$("subm"); sl.innerHTML="";
+  if(!Array.isArray(S.submitted)){
+    $("submHint").textContent="This upload was published before this section existed. Upload the tracker again from Admin to show the list.";
+  }else if(!S.submitted.length){
+    $("submHint").textContent="No department has been listed as submitted yet (Setup sheet, Sl / Department list).";
+  }else{
+    $("submHint").innerHTML="";
+    const cn=document.createElement("span"); cn.className="subm-count"; cn.textContent=`${S.submitted.length} of ${S.depts.length}`;
+    $("submHint").append(cn," departments have submitted their resources. From the Setup sheet’s “Sl / Department” list.");
+    S.submitted.forEach((d,i)=>{
+      const li=document.createElement("li"); li.innerHTML="<span class='sl'></span><div><div class='dn2'></div><small></small></div>";
+      li.children[0].textContent=i+1; li.querySelector(".dn2").textContent=d;
+      const dr=S.rows.filter(r=>r.dept===d);
+      if(dr.length){const a=agg(dr); li.querySelector("small").textContent=`${a.recPlus} of ${a.app} items received · ${Math.round(a.prog*100)}% progress`;
+        li.tabIndex=0; const go=()=>{hiDept=hiDept===d?null:d;render();$("hm").scrollIntoView({behavior:"smooth",block:"center"});};
+        li.onclick=go; li.onkeydown=e=>{if(e.key==="Enter")go();};}
+      sl.append(li);
+    });
+  }
+
   // chase list
   const chase=deptA.filter(x=>x.a.notStarted>0).sort((a,b)=>b.a.notStarted-a.a.notStarted||a.a.prog-b.a.prog);
   const t=$("chase"); t.innerHTML="<thead><tr><th>Department</th><th>Focal person</th><th class='num'>Not started</th><th>Status</th></tr></thead><tbody></tbody>";
@@ -568,12 +604,15 @@ async function parseWorkbook(f){
   const cols=["Department","Mat #","Material","Status","Dept focal person","Due date","Date requested","Date received","Date approved","File / link / location","Remarks / blockers"];
   const rows=A.slice(hi+1).filter(r=>r[ix("Department")]).map(r=>cols.map((c,j)=>{const v=ix(c)>=0?r[ix(c)]:"";return j>=5&&j<=8?iso(v):String(v).trim();}));
   if(!rows.length) throw new Error("The Tracker sheet has no rows.");
-  let reportDate="", dueSoon=3, followups=0; const weights=DEFAULT_W.slice();
-  const su=wb.Sheets["Setup"]; if(su){XLSX.utils.sheet_to_json(su,{header:1,defval:""}).forEach(r=>{
+  let reportDate="", dueSoon=3, followups=0; const weights=DEFAULT_W.slice(), submitted=[];
+  const su=wb.Sheets["Setup"]; if(su){const SU=XLSX.utils.sheet_to_json(su,{header:1,defval:""}); SU.forEach(r=>{
     if(r[0]==="Report date"&&r[1]) reportDate=iso(r[1]); if(String(r[0]).startsWith("Due-soon")&&r[1]!=="") dueSoon=+r[1];
-    STAGES.forEach((s,i)=>{if(r[0]===s.k&&r[1]!=="")weights[i]=+r[1];});});}
+    STAGES.forEach((s,i)=>{if(r[0]===s.k&&r[1]!=="")weights[i]=+r[1];});});
+    // "Resources submitted by department" list: the Sl / Department table in the Setup sheet
+    SU.forEach((r,ri)=>{ if(submitted.length) return; const c=r.findIndex((v,j)=>String(v).trim()==="Sl"&&String(r[j+1]).trim()==="Department");
+      if(c<0) return; for(let k=ri+1;k<SU.length;k++){const n=SU[k][c], d=String(SU[k][c+1]??"").trim(); if(n===""&&!d) break; if(d&&d!=="0"&&!submitted.includes(d)) submitted.push(d);} });}
   const fl=wb.Sheets["Follow-up Log"]; if(fl){const F=XLSX.utils.sheet_to_json(fl,{header:1,defval:""});const h=F.findIndex(r=>r[0]==="Date");if(h>=0)followups=F.slice(h+1).filter(r=>r[0]!==""&&r[1]!=="").length;}
-  return {reportDate,dueSoon,rows,followups,source:f.name,weights};
+  return {reportDate,dueSoon,rows,followups,source:f.name,weights,submitted};
 }
 
 // ---------- show data
@@ -654,7 +693,7 @@ picker.onchange=async e=>{
     const cnt=k=>st.filter(s=>s===k).length;
     const items=[["File",f.name],["Snapshot date",pending.reportDate?fmtD(parseISO(pending.reportDate)):"not set"],
       ["Departments",new Set(rows.map(r=>r[0])).size],["Items",rows.length],
-      ["Received or beyond",cnt("Received")+cnt("Under Review")+cnt("Approved")],["Not started",cnt("Not Started")],["Approved",cnt("Approved")]];
+      ["Received or beyond",cnt("Received")+cnt("Under Review")+cnt("Approved")],["Not started",cnt("Not Started")],["Approved",cnt("Approved")],["Resources submitted",`${pending.submitted.length} departments`]];
     const dl=$("pvList"); dl.innerHTML="";
     items.forEach(([a,b])=>{const dt=document.createElement("dt");dt.textContent=a;const dd=document.createElement("dd");dd.textContent=b;dl.append(dt,dd);});
     $("preview").hidden=false; msg("adminMsg","");
