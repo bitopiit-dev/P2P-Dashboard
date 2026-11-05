@@ -71,6 +71,25 @@ button,input{font:inherit;color:inherit}
 .btn.primary:hover{background:#0A6AA5}
 .icon-btn{width:38px;padding:9px 0;text-align:center}
 #fileIn{display:none}
+/* live digital clock */
+.topright{display:flex;flex-direction:column;align-items:stretch;gap:14px}
+/* clock and button bar share one card style, background and width */
+.clock,.topright .actions{border-radius:20px;border:1px solid var(--glass-line);
+  background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 18%,transparent),var(--glass));
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);position:relative;overflow:hidden}
+.topright .actions{justify-content:space-between;align-items:center;padding:8px 10px 8px 14px}
+.clock{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 20px 12px 22px}
+.clock .tm{display:flex;align-items:baseline;gap:2px;font-family:var(--display);font-variant-numeric:tabular-nums;line-height:1;color:var(--head)}
+.clock .ckn{font-size:clamp(34px,3.6vw,46px);font-weight:800;letter-spacing:.01em}
+.clock .col{font-size:clamp(30px,3.2vw,40px);font-weight:700;color:var(--accent);animation:blink 1s steps(1) infinite;margin:0 1px}
+.clock .sec{font-size:clamp(22px,2.2vw,28px);font-weight:700;color:var(--accent);min-width:2ch}
+.clock .ap{font-size:13px;font-weight:700;letter-spacing:.08em;color:var(--muted);margin-left:6px}
+.clock .dt{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);font-weight:500}
+.clock .dt b{color:var(--fg);font-weight:600}
+.clock .live{width:7px;height:7px;border-radius:50%;background:var(--s-ap);box-shadow:0 0 0 0 var(--s-ap);animation:pulse 2s infinite}
+@keyframes blink{50%{opacity:.25}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--s-ap) 60%,transparent)}70%{box-shadow:0 0 0 7px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@media (max-width:760px){.topright{width:100%}}
 .toast{font-size:13px;color:var(--s-ap);min-height:1em;margin-top:6px;text-align:right}
 .toast.err{color:var(--s-ns)}
 
@@ -245,7 +264,12 @@ footer b{font-weight:600}
       <div class="sub" id="subline">—</div>
       <div class="sub" id="updated"></div>
     </div>
-    <div>
+    <div class="topright">
+      <div class="clock" id="clock" role="timer" aria-live="off" aria-label="Current date and time">
+        <div class="tm"><span class="ckn" id="ckHM">--</span><span class="col">:</span><span class="ckn" id="ckM">--</span><span class="col">:</span><span class="sec" id="ckS">--</span><span class="ap" id="ckAP"></span></div>
+        <div class="dt"><span class="live" aria-hidden="true"></span><b id="ckDay">—</b><span id="ckDate"></span></div>
+      </div>
+      <div>
       <div class="actions">
         <button class="btn" id="refreshBtn" type="button">Refresh</button>
         <button class="btn" id="clearBtn" type="button">Clear highlights</button>
@@ -254,6 +278,7 @@ footer b{font-weight:600}
         <input type="file" id="fileIn" accept=".xlsx,.xlsm">
       </div>
       <div class="toast" id="toast" role="status"></div>
+      </div>
     </div>
   </header>
 
@@ -625,6 +650,17 @@ document.addEventListener("scroll",()=>{if(!TOUCH)tip.style.opacity=0;},{passive
 // scale up on large displays (TV, 2K, 4K) so the dashboard fills the screen
 function fitScreen(){const w=document.documentElement.clientWidth;const z=w>1440?Math.min(w/1440,3):1;document.documentElement.style.setProperty("--z",z.toFixed(3));}
 fitScreen(); addEventListener("resize",fitScreen); addEventListener("orientationchange",fitScreen);
+
+// ---------- live clock (device time), ticks on each second boundary
+function tick(){
+  const n=new Date(), h=n.getHours(), p2=v=>String(v).padStart(2,"0");
+  $("ckHM").textContent=p2(h%12||12); $("ckM").textContent=p2(n.getMinutes()); $("ckS").textContent=p2(n.getSeconds());
+  $("ckAP").textContent=h<12?"AM":"PM";
+  $("ckDay").textContent=n.toLocaleDateString("en-GB",{weekday:"long"});
+  $("ckDate").textContent=n.toLocaleDateString("en-GB",{day:"2-digit",month:"long",year:"numeric"});
+  setTimeout(tick,1000-n.getMilliseconds()+5);
+}
+tick();
 
 // ---------- theme + highlight buttons
 $("themeBtn").onclick=()=>{const cur=document.documentElement.getAttribute("data-theme")==="light"?"dark":"light";
