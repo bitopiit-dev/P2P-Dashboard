@@ -128,8 +128,22 @@ button,input{font:inherit;color:inherit}
 .hm .pp .mini{flex:1;height:5px;background:var(--bg2);border-radius:3px;overflow:hidden}
 .hm .pp .mini i{display:block;height:100%;background:var(--brand)}
 .row-hi{outline:2px solid var(--accent);outline-offset:2px}
-.matkey{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 16px;margin-top:16px;font-size:12.5px;color:var(--muted)}
-.matkey b{font-family:var(--display);color:var(--head);font-weight:700;margin-right:6px}
+.matkey-title{margin:22px 0 10px;font:700 13px/1.2 var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.matkey{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.mk{display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;padding:10px 12px;border-radius:14px;
+  border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line));
+  background:linear-gradient(135deg,color-mix(in srgb,var(--brand) 16%,var(--panel2)),var(--panel2));
+  transition:transform .15s,box-shadow .15s,border-color .15s}
+.mk:hover{transform:translateY(-2px);border-color:var(--accent);box-shadow:0 6px 18px color-mix(in srgb,var(--brand) 30%,transparent)}
+.mk[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.mk .no{flex:none;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:800 16px/1 var(--display);color:#fff;
+  background:conic-gradient(var(--pc) calc(var(--p)*1%),color-mix(in srgb,var(--pc) 22%,transparent) 0);position:relative}
+.mk .no::before{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--navy)}
+.mk .no span{position:relative}
+.mk .tx{min-width:0;flex:1}
+.mk .nm{display:block;font-weight:600;font-size:14px;color:var(--head);line-height:1.25}
+.mk .pv{display:block;font:600 12px/1.3 var(--display);color:var(--pc);margin-top:2px;letter-spacing:.02em}
+@media (prefers-reduced-motion:reduce){.mk:hover{transform:none}}
 
 /* grid two */
 .two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:18px 0}
@@ -283,6 +297,7 @@ footer b{font-weight:600}
       </div>
     </div>
     <div class="hm-scroll"><div class="hm" id="hm"></div></div>
+    <div class="matkey-title">Materials · tap one to light up its column</div>
     <div class="matkey" id="matkey"></div>
   </section>
 
@@ -367,7 +382,7 @@ const SHORT = ["Functions","Process flows","Manpower cap","Reporting lines","Org
 const $ = id => document.getElementById(id);
 const fmtD = d => d ? d.toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
 const pct = x => (Math.round(x*1000)/10).toFixed(1)+"%";
-let state = null, active = null, hiDept = null;
+let state = null, active = null, hiDept = null, hiMat = null;
 
 function parseISO(s){ if(!s) return null; const [y,m,d]=s.slice(0,10).split("-").map(Number); return new Date(y,m-1,d); }
 function todayD(){ const t=new Date(); return new Date(t.getFullYear(),t.getMonth(),t.getDate()); }
@@ -465,7 +480,7 @@ function render(){
   // heatmap
   const hm=$("hm"); hm.innerHTML="";
   const h0=document.createElement("div"); h0.className="ch left"; h0.textContent="Department"; hm.append(h0);
-  S.mats.forEach(m=>{const h=document.createElement("div");h.className="ch";h.textContent=m;h.dataset.tip=`Material ${m}|${S.matName[m]}`;hm.append(h);});
+  S.mats.forEach(m=>{const h=document.createElement("div");h.className="ch";h.textContent=m;h.dataset.tip=`Material ${m}|${S.matName[m]}`;if(hiMat===m){h.style.color="var(--accent)";h.style.fontWeight=800;}hm.append(h);});
   const hp=document.createElement("div"); hp.className="ch pcol"; hp.textContent="Progress"; hm.append(hp);
   S.depts.forEach(d=>{
     const dr=S.rows.filter(r=>r.dept===d), da=agg(dr), silent=da.app>0&&da.notStarted===da.app;
@@ -479,7 +494,7 @@ function render(){
       else if(r.status==="Not Started"){ c.style.background="color-mix(in srgb,var(--s-ns) 8%,transparent)"; c.style.borderColor="color-mix(in srgb,var(--s-ns) 45%,transparent)"; }
       else { c.style.background=col; }
       if(r.flag==="Overdue") c.style.outline="2px solid var(--s-ns)";
-      const dim=(active&&r.status!==active)||(hiDept&&r.dept!==hiDept); if(dim) c.classList.add("dim");
+      const dim=(active&&r.status!==active)||(hiDept&&r.dept!==hiDept)||(hiMat&&r.mat!==hiMat); if(dim) c.classList.add("dim");
       c.setAttribute("aria-label",`${d}, ${r.material}: ${r.status}`);
       c.dataset.tip=`${d} · #${m}|${r.material}|${r.status}|${r.focal}|${r.flag}|${r.due?fmtD(r.due):""}|${r.rem||""}`;
       hm.append(c);
@@ -487,7 +502,19 @@ function render(){
     const pp=document.createElement("div"); pp.className="pp"; pp.innerHTML=`<span></span><span class="mini"><i style="width:${da.prog*100}%"></i></span>`;
     pp.firstChild.textContent=Math.round(da.prog*100)+"%"; hm.append(pp);
   });
-  $("matkey").innerHTML=""; S.mats.forEach((m,i)=>{const d=document.createElement("div");d.innerHTML="<b></b><span></span>";d.children[0].textContent=m;d.children[1].textContent=SHORT[m-1]||S.matName[m];d.title=S.matName[m];$("matkey").append(d);});
+  // material key: cards with a progress ring around the number; tap to highlight that material's column
+  $("matkey").innerHTML=""; S.mats.forEach(m=>{
+    const a=agg(S.rows.filter(r=>r.mat===m)), p=Math.round(a.prog*100);
+    const pc=a.prog>=.6?"var(--s-ap)":a.prog>=.4?"var(--accent)":a.prog>0?"var(--s-ip)":"var(--s-ns)";
+    const b=document.createElement("button"); b.type="button"; b.className="mk"; b.style.setProperty("--p",p); b.style.setProperty("--pc",pc);
+    b.setAttribute("aria-pressed",hiMat===m?"true":"false");
+    b.innerHTML="<span class='no'><span></span></span><span class='tx'><span class='nm'></span><span class='pv'></span></span>";
+    b.querySelector(".no span").textContent=m; b.querySelector(".nm").textContent=SHORT[m-1]||S.matName[m];
+    b.querySelector(".pv").textContent=`${p}% · ${a.recPlus}/${a.app} received`;
+    b.dataset.tip=`Material ${m}|${S.matName[m]}|${a.recPlus} of ${a.app} received · ${a.notStarted} not started`;
+    b.onclick=()=>{hiMat=hiMat===m?null:m; render();};
+    $("matkey").append(b);
+  });
 
   // rankings
   const deptA=S.depts.map(d=>{const a=agg(S.rows.filter(r=>r.dept===d));return {d,a,silent:a.app>0&&a.notStarted===a.app};}).sort((x,y)=>y.a.prog-x.a.prog);
@@ -602,7 +629,7 @@ fitScreen(); addEventListener("resize",fitScreen); addEventListener("orientation
 // ---------- theme + highlight buttons
 $("themeBtn").onclick=()=>{const cur=document.documentElement.getAttribute("data-theme")==="light"?"dark":"light";
   document.documentElement.setAttribute("data-theme",cur); try{localStorage.setItem("p2p-theme",cur);}catch(_){} };
-$("clearBtn").onclick=()=>{if(!state)return;active=null;hiDept=null;render();};
+$("clearBtn").onclick=()=>{if(!state)return;active=null;hiDept=null;hiMat=null;render();};
 
 // ---------- workbook parsing (admin only)
 const DEFAULT_W=STAGES.map(s=>s.w);
@@ -631,7 +658,7 @@ async function parseWorkbook(f){
 // ---------- show data
 function show(raw,meta){
   STAGES.forEach((s,i)=>{s.w=(raw.weights&&raw.weights[i]!=null)?raw.weights[i]:DEFAULT_W[i];});
-  state=build(raw); active=null; hiDept=null;
+  state=build(raw); active=null; hiDept=null; hiMat=null;
   $("empty").hidden=true; $("main").hidden=false; render();
   const u=$("updated");
   u.textContent=meta&&meta.at?`Last published ${new Date(meta.at).toLocaleString("en-GB",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}${meta.offline?" · offline, showing the last copy this device saw":""}`:"";
