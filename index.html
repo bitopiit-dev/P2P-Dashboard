@@ -343,6 +343,7 @@ footer b{font-weight:600}
         <div class="row"><button class="btn primary" type="button" id="publishBtn">Publish to everyone</button><button class="btn" type="button" id="cancelBtn">Cancel</button></div>
       </div>
       <div class="msg" id="adminMsg" role="status"></div>
+      <button class="btn" type="button" id="doneOut" hidden>Sign out</button>
       <h3>Recent uploads</h3>
       <p class="hint">The newest upload is what everyone sees. Delete it to go back to the previous one.</p>
       <ul id="history" class="history"></ul>
@@ -693,12 +694,14 @@ $("loginForm").onsubmit=async e=>{
   if(error){msg("loginMsg",error.message==="Invalid login credentials"?"Wrong email or password.":error.message,"err");return;}
   msg("loginMsg",""); refreshAdmin();
 };
-$("logoutBtn").onclick=async()=>{await sb.auth.signOut(); pending=null; $("preview").hidden=true; msg("adminMsg",""); refreshAdmin();};
+$("logoutBtn").onclick=async()=>{await sb.auth.signOut(); pending=null; $("preview").hidden=true; $("doneOut").hidden=true; msg("adminMsg",""); refreshAdmin();};
+// sign-out button shown right after a successful publish; signs out and closes the panel
+$("doneOut").onclick=async()=>{await sb.auth.signOut(); pending=null; $("preview").hidden=true; $("doneOut").hidden=true; msg("adminMsg",""); dlg.close(); refreshAdmin();};
 
 const picker=$("fileIn");
 $("pickBtn").onclick=()=>picker.click();
 picker.onchange=async e=>{
-  const f=e.target.files[0]; e.target.value=""; if(!f) return;
+  const f=e.target.files[0]; e.target.value=""; if(!f) return; $("doneOut").hidden=true;
   try{
     pending=await parseWorkbook(f);
     const rows=pending.rows, st=rows.map(r=>r[3]||"N/A");
@@ -717,7 +720,7 @@ $("publishBtn").onclick=async()=>{
   const {error}=await sb.from("tracker_snapshots").insert({source_name:pending.source,payload:pending});
   b.disabled=false;
   if(error){msg("adminMsg","Couldn’t publish: "+error.message,"err");return;}
-  pending=null; $("preview").hidden=true; msg("adminMsg","Published. Everyone now sees this tracker.","ok");
+  pending=null; $("preview").hidden=true; msg("adminMsg","Published. Everyone now sees this tracker.","ok"); $("doneOut").hidden=false;
   await loadLatest(false); loadHistory();
 };
 async function loadHistory(){
